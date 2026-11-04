@@ -36,7 +36,20 @@ Em ambientes de rede restrita, permita o domínio exato do projeto Supabase. Nã
 
 ## Publicar no GitHub Pages
 
-Os caminhos são relativos e funcionam em `https://usuario.github.io/repositorio/`. O GitHub Pages não permite selecionar `site/` diretamente em “Deploy from a branch” (as opções são raiz e `docs/`). Para manter esta organização, use Actions:
+### Publicação pela main e pela raiz
+
+Em **Settings → Pages → Build and deployment**, selecione **Deploy from a branch**, branch **main** e pasta **/(root)**, e salve. O `index.html` da raiz encaminha automaticamente para `./site/`, mantendo os arquivos do Front-end organizados nessa pasta. Não há build ou instalação de dependências.
+
+Após o workflow **pages build and deployment** concluir, abra:
+
+- Página inicial: <https://xxzre.github.io/jogo_show_do_milhao/>
+- Acesso direto ao site: <https://xxzre.github.io/jogo_show_do_milhao/site/>
+
+A aba **Actions** mostra as execuções de publicação, não a interface do site. O botão **Visit site** em **Settings → Pages** abre a página publicada. Se estiver vendo uma versão anterior, confirme o commit da última publicação e atualize o navegador com `Ctrl+F5`.
+
+### Alternativa: publicar somente a pasta site com Actions
+
+Os caminhos são relativos e também funcionam ao publicar apenas o conteúdo de `site/` na raiz do endereço Pages. O GitHub Pages não permite selecionar `site/` diretamente em “Deploy from a branch” (as opções são raiz e `docs/`). Para publicar somente essa pasta, substitua o modo de publicação por Actions:
 
 1. Com autorização da equipe, crie `.github/workflows/pages.yml` na raiz usando o exemplo abaixo. Ele não foi adicionado automaticamente para não ativar publicação no repositório compartilhado.
 2. Em **Settings → Pages → Build and deployment**, selecione **GitHub Actions**.
