@@ -25,9 +25,9 @@ class SupabaseRepository:
     """Repositório responsável pelas operações no banco de dados Supabase."""
 
     DIFICULDADES_ORDEM: tuple[tuple[str, int], ...] = (
-        ("facil", 3),
-        ("media", 3),
-        ("dificil", 3),
+        ("facil", 6),
+        ("media", 6),
+        ("dificil", 6),
     )
 
     CAMPOS_OBRIGATORIOS_PERGUNTA: set[str] = {
@@ -79,8 +79,8 @@ class SupabaseRepository:
 
     def buscar_perguntas_partida(self) -> list[dict[str, Any]]:
         """
-        Busca e seleciona 9 perguntas sem repetição, estritamente na ordem:
-        3 fáceis ('facil'), 3 médias ('media') e 3 difíceis ('dificil').
+        Busca 18 perguntas sem repetição: 6 por dificuldade.
+        Três de cada nível serão usadas e três ficarão de reserva para pulos.
 
         Returns:
             list[dict[str, Any]]: Lista ordenada com as 9 perguntas da partida.
@@ -167,6 +167,17 @@ class SupabaseRepository:
             raise DatabaseError(
                 f"Falha ao salvar partida no Supabase (UUID: {dados_partida.get('id')}): {exc}"
             ) from exc
+
+    def salvar_ajudas(self, ajudas: list[dict[str, Any]]) -> None:
+        """Persiste as ajudas da partida; reenvios não devem criar duplicatas."""
+        if not ajudas:
+            return
+        try:
+            self.client.table("ajudas_utilizadas").upsert(
+                ajudas, on_conflict="partida_id,pergunta_id,tipo"
+            ).execute()
+        except Exception as exc:
+            raise DatabaseError(f"Falha ao salvar historico de ajudas: {exc}") from exc
 
     def consultar_ranking_top10(self) -> list[dict[str, Any]]:
         """

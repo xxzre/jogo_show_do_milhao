@@ -102,7 +102,7 @@ def iniciar_fluxo_partida(
     """
     Orquestra a criação e execução de uma nova partida:
     1. Solicita apelido validado.
-    2. Busca as 9 perguntas no banco (3 fáceis, 3 médias, 3 difíceis) ANTES de iniciar o relógio.
+    2. Busca 18 perguntas no banco (9 titulares e 9 reservas) antes de iniciar o relógio.
     3. Executa a partida medindo o tempo exato de resposta.
     4. Persiste o resultado com garantia de idempotência.
     """
@@ -131,6 +131,12 @@ def iniciar_fluxo_partida(
     )
     resultado = partida.executar()
     persistir_com_reintento(repositorio, resultado, partidas_pendentes)
+    # Só registra ajudas depois de confirmar a existência da partida.
+    if resultado not in partidas_pendentes:
+        try:
+            repositorio.salvar_ajudas(partida.historico_ajudas)
+        except DatabaseError as erro:
+            print(f"[!] Histórico de ajudas não salvo: {erro}")
 
 
 def exibir_ranking(repositorio: SupabaseRepository) -> None:
