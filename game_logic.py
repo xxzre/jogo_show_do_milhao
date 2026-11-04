@@ -1,4 +1,4 @@
-"""Motor do Show do Milhão: nove etapas e quatro ajudas simuladas."""
+"""Motor do Show do Milhão: nove etapas, quatro ajudas simuladas e contrato de dados Supabase."""
 import time
 import uuid
 from dataclasses import dataclass
@@ -15,11 +15,13 @@ ROTULO_DIFICULDADE = {"facil": "FÁCIL", "media": "MÉDIA", "dificil": "DIFÍCIL
 
 
 def formatar_moeda(valor: float) -> str:
+    """Formata um valor numérico puro apenas para exibição visual no terminal."""
     numero = f"{valor:,.2f}"
     return "R$ " + numero.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def solicitar_apelido() -> str:
+    """Solicita e valida o apelido obrigatório do jogador (1 a 100 caracteres)."""
     while True:
         try:
             apelido = input("\nDigite seu apelido: ").strip()
@@ -32,6 +34,17 @@ def solicitar_apelido() -> str:
 
 @dataclass
 class ResultadoPartida:
+    """
+    Representa o contrato exato da tabela 'partidas' no Supabase:
+    - id: UUID v4 em string
+    - jogo_id: ID do jogo cadastrado na tabela 'jogos'
+    - apelido: Nome/apelido do jogador
+    - valor_ganho: Float numérico puro (ex: 10000.0)
+    - tempo_segundos: Float arredondado em 2 casas decimais
+    - acertos: Inteiro de 0 a 9
+    - motivo_encerramento: 'vitoria', 'erro' ou 'desistencia'
+    - data_hora: String ISO 8601 em UTC
+    """
     id: str
     jogo_id: int | str
     apelido: str
@@ -42,15 +55,21 @@ class ResultadoPartida:
     data_hora: str
 
     def para_dicionario(self) -> dict[str, Any]:
+        """Serializa os dados garantindo os tipos e nomes exatos das colunas no Supabase."""
+        jogo_id_normalizado: int | str = (
+            int(self.jogo_id)
+            if isinstance(self.jogo_id, str) and self.jogo_id.isdigit()
+            else self.jogo_id
+        )
         return {
-            "id": self.id,
-            "jogo_id": self.jogo_id,
-            "apelido": self.apelido,
-            "valor_ganho": self.valor_ganho,
-            "tempo_segundos": self.tempo_segundos,
-            "acertos": self.acertos,
-            "motivo_encerramento": self.motivo_encerramento,
-            "data_hora": self.data_hora,
+            "id": str(self.id),
+            "jogo_id": jogo_id_normalizado,
+            "apelido": str(self.apelido).strip(),
+            "valor_ganho": float(self.valor_ganho),
+            "tempo_segundos": round(float(self.tempo_segundos), 2),
+            "acertos": int(self.acertos),
+            "motivo_encerramento": str(self.motivo_encerramento).strip().lower(),
+            "data_hora": str(self.data_hora),
         }
 
 
@@ -165,7 +184,7 @@ class PartidaShowDoMilhao:
                         continue
                     if escolha == correta:
                         self.acertos += 1
-                        self.valor_ganho = TABELA_PREMIOS[indice]
+                        self.valor_ganho = float(TABELA_PREMIOS[indice])
                         print(f"Certa resposta! Prêmio: {formatar_moeda(self.valor_ganho)}")
                         if self.acertos == 9:
                             self.motivo_encerramento = "vitoria"
@@ -184,8 +203,12 @@ class PartidaShowDoMilhao:
         print(f"Fim da partida: {self.motivo_encerramento}. "
               f"Prêmio final: {formatar_moeda(self.valor_ganho)}")
         return ResultadoPartida(
-            id=self.partida_id, jogo_id=self.jogo_id, apelido=self.apelido,
-            valor_ganho=self.valor_ganho, tempo_segundos=self.tempo_segundos,
-            acertos=self.acertos, motivo_encerramento=self.motivo_encerramento,
+            id=self.partida_id,
+            jogo_id=self.jogo_id,
+            apelido=self.apelido,
+            valor_ganho=float(self.valor_ganho),
+            tempo_segundos=round(float(self.tempo_segundos), 2),
+            acertos=int(self.acertos),
+            motivo_encerramento=self.motivo_encerramento,
             data_hora=datetime.now(timezone.utc).isoformat(),
         )
