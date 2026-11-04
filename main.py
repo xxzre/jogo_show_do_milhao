@@ -1,10 +1,12 @@
 """
-Ponto de entrada principal (CLI) do jogo Show do Milhão.
-Gerencia o menu interativo no terminal, orquestra o início das partidas,
-exibe o ranking Top 10 e controla a fila/memória de reintento idempotente
-caso ocorra falha de rede ao salvar uma partida no Supabase.
+Ponto de entrada principal (CLI) do jogo Show do Milhão e Handler Serverless (Vercel).
+- No Terminal (`python main.py`): executa o menu interativo, partidas e reintento idempotente.
+- Na Vercel (Serverless Runtime): exporta a classe `handler` exigida pelo builder Python da Vercel,
+  exibindo uma página/API de status e o Ranking Top 10 sem quebrar o deploy do repositório compartilhado.
 """
 
+from http.server import BaseHTTPRequestHandler
+import json
 import sys
 from typing import Any
 
@@ -228,5 +230,101 @@ def main() -> None:
             print("\n[!] Opção inválida! Por favor, escolha uma opção válida do menu.")
 
 
+class handler(BaseHTTPRequestHandler):
+    """
+    Entrypoint HTTP exigido pela Vercel quando `main.py` está na raiz do repositório.
+    Permite que o build da Vercel passe sem erro (`PYTHON_ENTRYPOINT_NOT_FOUND`) e
+    fornece um endpoint `/api/ranking` (JSON) ou visualização de status do módulo Python
+    enquanto o front-end da equipe é integrado ao repositório.
+    """
+
+    def do_GET(self) -> None:  # noqa: N802 (nome exigido por BaseHTTPRequestHandler)
+        ranking_dados: list[dict[str, Any]] = []
+        status_msg = "Conectado ao Supabase"
+        jogo_id_atual: int | str = "N/A"
+
+        try:
+            config = carregar_configuracao()
+            jogo_id_atual = config.jogo_id
+            repositorio = SupabaseRepository(config)
+            ranking_dados = repositorio.consultar_ranking_top10()
+        except (ConfigError, DatabaseError) as exc:
+            status_msg = f"Aguardando configuração de variáveis de ambiente na Vercel ({exc})"
+
+        # Se a requisição pedir JSON (útil para o site do seu amigo consumir se quiser)
+        if self.path.startswith("/api/ranking") or "application/json" in self.headers.get("Accept", ""):
+            corpo_json = json.dumps(
+                {
+                    "modulo": "Show do Milhão - Módulo Python",
+                    "jogo_id": jogo_id_atual,
+                    "status": status_msg,
+                    "ranking_top10": ranking_dados,
+                },
+                ensure_ascii=False,
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(corpo_json)
+            return
+
+        # Renderiza uma página HTML limpa de status e Ranking Top 10
+        linhas_html = ""
+        for pos, item in enumerate(ranking_dados, start=1):
+            apelido = str(item.get("apelido", "---"))
+            valor = formatar_moeda(float(item.get("valor_ganho", 0.0)))
+            acertos = f"{int(item.get('acertos', 0))}/9"
+            tempo = f"{float(item.get('tempo_segundos', 0.0)):.2f}s"
+            motivo = str(item.get("motivo_encerramento", "---")).capitalize()
+            linhas_html += (
+                f"<tr><td>{pos}º</td><td>{apelido}</td><td>{valor}</td>"
+                f"<td>{acertos}</td><td>{tempo}</td><td>{motivo}</td></tr>"
+            )
+
+        if not linhas_html:
+            linhas_html = "<tr><td colspan='6'>Nenhuma partida encontrada ou variáveis de ambiente pendentes na Vercel.</td></tr>"
+
+        html = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Show do Milhão - Módulo Python & Ranking</title>
+    <style>
+        body {{ font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }}
+        .container {{ max-width: 860px; margin: 0 auto; background: #1e293b; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); }}
+        h1 {{ color: #fbbf24; margin-top: 0; }}
+        .badge {{ display: inline-block; padding: 0.35rem 0.75rem; border-radius: 999px; background: #334155; font-size: 0.85rem; margin-bottom: 1.5rem; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 1rem; }}
+        th, td {{ padding: 0.75rem; text-align: left; border-bottom: 1px solid #334155; }}
+        th {{ color: #fbbf24; font-weight: 600; }}
+        code {{ background: #0f172a; padding: 0.2rem 0.4rem; border-radius: 4px; color: #38bdf8; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Show do Milhão — Integração Python + Supabase</h1>
+        <div class="badge">Status: {status_msg} | Jogo ID: {jogo_id_atual}</div>
+        <p>O módulo do jogo em Python está pronto. Para jogar pelo terminal localmente, execute <code>python main.py</code>.</p>
+        <h2>Ranking Top 10 Atual</h2>
+        <table>
+            <thead>
+                <tr><th>Pos</th><th>Apelido</th><th>Prêmio</th><th>Acertos</th><th>Tempo</th><th>Status</th></tr>
+            </thead>
+            <tbody>{linhas_html}</tbody>
+        </table>
+    </div>
+</body>
+</html>"""
+
+        corpo_bytes = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(corpo_bytes)
+
+
 if __name__ == "__main__":
     main()
+
